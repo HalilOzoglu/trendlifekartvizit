@@ -38,10 +38,6 @@ const SOCIAL_LABELS: Record<string, string> = {
 };
 
 /* Animasyon varyantları */
-const fadeUp = {
-  hidden: { opacity: 0, y: 28 },
-  visible: (i: number) => ({ opacity: 1, y: 0, transition: { delay: i * 0.07, duration: 0.5, ease: [0.22, 1, 0.36, 1] } }),
-};
 const scaleIn = {
   hidden: { opacity: 0, scale: 0.7 },
   visible: (i: number) => ({ opacity: 1, scale: 1, transition: { delay: i * 0.06, duration: 0.45, ease: [0.34, 1.56, 0.64, 1] } }),
@@ -228,7 +224,7 @@ export default function CardView({ card, baseUrl }: Props) {
               <AnimatePresence mode="wait">
                 {visibleSocial.map((link, i) => (
                   <motion.a
-                    key={`${link.id}-${socialPage}`}
+                    key={`${link.id ?? link.platform}-${socialPage}-${i}`}
                     custom={i}
                     variants={scaleIn}
                     initial="hidden"

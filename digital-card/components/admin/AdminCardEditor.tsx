@@ -1,8 +1,8 @@
 "use client";
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
-import type { Card, Profile, SocialLink } from "@/lib/types";
-import SocialLinksEditor from "@/components/dashboard/SocialLinksEditor";
+import type { Card, Profile } from "@/lib/types";
+import SocialLinksEditor, { type SocialLinkDraft } from "@/components/dashboard/SocialLinksEditor";
 
 interface Props {
   card: Card | null;
@@ -10,9 +10,13 @@ interface Props {
   onClose: () => void;
 }
 
+function toDrafts(links: Card["social_links"]): SocialLinkDraft[] {
+  return (links ?? []).map(l => ({ ...l, _tempId: l.id }));
+}
+
 export default function AdminCardEditor({ card, users, onClose }: Props) {
   const [data, setData] = useState<Partial<Card>>(card ?? {});
-  const [socialLinks, setSocialLinks] = useState<Partial<SocialLink>[]>(card?.social_links ?? []);
+  const [socialLinks, setSocialLinks] = useState<SocialLinkDraft[]>(toDrafts(card?.social_links));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
@@ -25,11 +29,13 @@ export default function AdminCardEditor({ card, users, onClose }: Props) {
     if (!data.full_name?.trim()) { setError("Ad Soyad zorunludur"); return; }
     setError("");
     setSaving(true);
+
+    const validLinks = socialLinks.filter(l => l.url?.trim() && l.platform);
     const supabase = createClient();
 
     const cardData = {
       user_id: data.user_id,
-      username: data.username,
+      username: data.username.trim().toLowerCase().replace(/\s+/g, "-"),
       full_name: data.full_name,
       title: data.title ?? null,
       company: data.company ?? null,
@@ -65,23 +71,32 @@ export default function AdminCardEditor({ card, users, onClose }: Props) {
 
       if (cardId) {
         await supabase.from("social_links").delete().eq("card_id", cardId);
-        if (socialLinks.length > 0) {
+        if (validLinks.length > 0) {
           const { error } = await supabase.from("social_links").insert(
-            socialLinks.map((l, i) => ({ card_id: cardId, platform: l.platform, url: l.url, order_index: i }))
+            validLinks.map((l, i) => ({
+              card_id: cardId,
+              platform: l.platform,
+              url: l.url!.trim(),
+              order_index: i,
+            }))
           );
           if (error) throw error;
         }
       }
       onClose();
     } catch (err: any) {
-      setError(err?.message?.includes("unique") ? "Bu URL adı zaten kullanılıyor" : `Hata: ${err?.message}`);
+      const msg = err?.message ?? "";
+      setError(msg.includes("unique") || msg.includes("duplicate")
+        ? "Bu URL adı zaten kullanılıyor"
+        : `Hata: ${msg || "Bilinmeyen hata"}`
+      );
     } finally {
       setSaving(false);
     }
   };
 
   return (
-    <div style={{ minHeight: "100vh", background: "#0a0a14", padding: "24px 16px" }}>
+    <div style={{ minHeight: "100vh", background: "#0a0a14", padding: "24px 16px", color: "#fff" }}>
       <div style={{ maxWidth: 700, margin: "0 auto" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
           <h1 style={{ fontSize: "1.3rem", fontWeight: 700 }}>{card ? "Kartvizit Düzenle" : "Yeni Kartvizit"}</h1>
@@ -105,13 +120,14 @@ export default function AdminCardEditor({ card, users, onClose }: Props) {
             <Field label="Şirket" value={data.company ?? ""} onChange={f("company")} />
             <Field label="Telefon" value={data.phone ?? ""} onChange={f("phone")} />
             <Field label="E-posta" value={data.email ?? ""} onChange={f("email")} />
+            <Field label="Website" value={data.website ?? ""} onChange={f("website")} />
           </div>
           <div className="form-group" style={{ marginTop: 12 }}>
             <label className="form-label">Biyografi</label>
             <textarea className="form-input" value={data.bio ?? ""} onChange={f("bio")} rows={3} style={{ resize: "vertical" }} />
           </div>
+          <Field label="Logo / Kapak Görseli URL" value={data.cover_url ?? ""} onChange={f("cover_url")} />
           <Field label="Profil Fotoğrafı URL" value={data.avatar_url ?? ""} onChange={f("avatar_url")} />
-          <Field label="Kapak Fotoğrafı URL" value={data.cover_url ?? ""} onChange={f("cover_url")} />
           <div className="form-group">
             <label className="form-label">Durum</label>
             <select className="form-input" value={data.is_active ? "true" : "false"} onChange={e => setData(p => ({ ...p, is_active: e.target.value === "true" }))}>
@@ -146,10 +162,10 @@ export default function AdminCardEditor({ card, users, onClose }: Props) {
           <Field label="YouTube URL" value={data.video_url ?? ""} onChange={f("video_url")} />
         </Section>
 
+        {error && <p style={{ color: "#e94560", fontSize: "0.85rem", marginBottom: 12, textAlign: "center" }}>{error}</p>}
         <button className="btn-primary" onClick={handleSave} disabled={saving} style={{ width: "100%", padding: 14, fontSize: "1rem" }}>
           {saving ? "Kaydediliyor..." : "Kaydet"}
         </button>
-        {error && <p style={{ color: "#e94560", fontSize: "0.85rem", marginTop: 12, textAlign: "center" }}>{error}</p>}
       </div>
     </div>
   );
